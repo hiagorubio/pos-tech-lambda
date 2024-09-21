@@ -21,12 +21,12 @@ output "base_url" {
   value = aws_apigatewayv2_stage.lambda.invoke_url
 }
 
-output "cognito_user_pool_id" {
+output "aws_cognito_user_pool_pool_id" {
   description = "O ID do pool de usuários Cognito"
-  value       = module.aws_cognito_user_pool_complete.user_pool_id
+  value       = aws_cognito_user_pool.pool.id
 }
 
-output "cognito_client_id" {
+output "aws_cognito_user_pool_client_user_pool_client_id" {
   description = "O Client ID do pool de usuários Cognito"
-  value       = aws_cognito_user_pool_client.client.id
+  value       = aws_cognito_user_pool_client.user_pool_client.id
 }

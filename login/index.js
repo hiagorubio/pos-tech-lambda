@@ -1,5 +1,4 @@
 const AmazonCognitoIdentity = require("amazon-cognito-identity-js");
-const AWS = require("aws-sdk");
 
 // Configurações Cognito usando as variáveis de output geradas pelo Terraform
 const cognitoConfig = {
@@ -42,8 +41,7 @@ async function authenticateUser(cpf, password) {
   });
 }
 
-// Handler da Lambda para processar a autenticação via API Gateway
-exports.handler = async (event) => {
+async function loginUser(event) {
   try {
     const { cpf, password } = JSON.parse(event.body);
 
@@ -64,6 +62,24 @@ exports.handler = async (event) => {
         message: "Erro de autenticação",
         error: err.message,
       }),
+    };
+  }
+}
+
+async function registerUser(event) {}
+
+exports.handler = async (event) => {
+  const path = event.path;
+  const httpMethod = event.httpMethod;
+
+  if (path === "/auth/register" && httpMethod === "POST") {
+    return await registerUser(event);
+  } else if (path === "/auth/login" && httpMethod === "POST") {
+    return await loginUser(event);
+  } else {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ message: "Not found" }),
     };
   }
 };

@@ -1,5 +1,5 @@
-# Copyright (c) HashiCorp, Inc.
-# SPDX-License-Identifier: MPL-2.0
+
+
 
 provider "aws" {
   region = "us-east-1"
@@ -52,13 +52,14 @@ resource "aws_s3_object" "lambda_login" {
 }
 
 resource "aws_lambda_function" "login" {
-  function_name = "HelloWorld"
+  depends_on = [ aws_cognito_user_pool_client.user_pool_client, aws_cognito_user_pool.pool]
+  function_name = "Login"
 
   s3_bucket = aws_s3_bucket.lambda_bucket.id
   s3_key    = aws_s3_object.lambda_login.key
 
   runtime = "nodejs20.x"
-  handler = "hello.handler"
+  handler = "login.handler"
 
   source_code_hash = data.archive_file.lambda_login.output_base64sha256
 
@@ -66,8 +67,8 @@ resource "aws_lambda_function" "login" {
 
   environment {
     variables = {
-      COGNITO_USER_POOL_ID = module.aws_cognito_user_pool_complete.user_pool_id
-      COGNITO_CLIENT_ID    = module.aws_cognito_user_pool_complete.user_pool_client_id
+      COGNITO_USER_POOL_ID = aws_cognito_user_pool.pool.id
+      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.user_pool_client.id
     }
   }
 }
@@ -84,6 +85,12 @@ resource "aws_apigatewayv2_stage" "lambda" {
   auto_deploy = true
 }
 
+resource "aws_apigatewayv2_integration" "register" {
+  api_id             = aws_apigatewayv2_api.lambda.id
+  integration_type   = "AWS_PROXY" 
+  integration_uri    = aws_lambda_function.login.invoke_arn
+}
+
 resource "aws_apigatewayv2_integration" "login" {
   api_id = aws_apigatewayv2_api.lambda.id
 
@@ -95,8 +102,15 @@ resource "aws_apigatewayv2_integration" "login" {
 resource "aws_apigatewayv2_route" "login" {
   api_id = aws_apigatewayv2_api.lambda.id
 
-  route_key = "GET /hello"
+  route_key = "POST /auth/login"
   target    = "integrations/${aws_apigatewayv2_integration.login.id}"
+}
+
+resource "aws_apigatewayv2_route" "register" {
+  api_id = aws_apigatewayv2_api.lambda.id
+
+  route_key = "POST /auth/register"
+  target    = "integrations/${aws_apigatewayv2_integration.register.id}"
 }
 
 resource "aws_lambda_permission" "api_gw" {
@@ -108,46 +122,78 @@ resource "aws_lambda_permission" "api_gw" {
   source_arn = "${aws_apigatewayv2_api.lambda.execution_arn}/*/*"
 }
 
-resource "aws_cognito_user_pool_client" "client" {
-  name         = "user_pool_client_pos_tech"
-  user_pool_id = module.aws_cognito_user_pool_complete.user_pool_id
-}
-
-module "aws_cognito_user_pool_complete" {
-  source  = "lgallard/cognito-user-pool/aws"
-
-  user_pool_name           = aws_cognito_user_pool_client.client.id
-  alias_attributes         = ["custom:cpf"]  
+resource "aws_cognito_user_pool" "pool" {
+  name = "postech_user_pool"
   auto_verified_attributes = []
 
-  deletion_protection = "ACTIVE"
-
-  password_policy = {
-    minimum_length    = 10
-    require_lowercase = false
+  password_policy {
+    minimum_length    = 8
+    require_lowercase = true
     require_numbers   = true
     require_symbols   = true
     require_uppercase = true
   }
 
-  schemas = [
-    {
-      attribute_data_type      = "String"
-      developer_only_attribute = false
-      mutable                  = true
-      name                     = "custom:cpf"  # Adiciona o atributo CPF
-      required                 = true
-
-      string_attribute_constraints = {
-        min_length = 11
-        max_length = 11
-      }
+  schema {
+    name = "cpf"
+    attribute_data_type = "String"
+    mutable = true
+    string_attribute_constraints {
+      min_length = 11
+      max_length = 11
     }
-  ]
+  }
 
-  recovery_mechanisms = []
+   schema {
+    name = "email"
+    attribute_data_type = "String"
+    mutable = true
+    required = true  
+  }
+
+  schema {
+    name = "name"
+    attribute_data_type = "String"
+    mutable = true
+    required = true  
+  }
+
+  schema {
+    name = "phone_number"
+    attribute_data_type = "String"
+    mutable = true
+  }
+
 
   tags = {
-    hashicorp = "cognito-user-pool"
+    postech = "user_pool"
   }
+  username_attributes = [ "email"  ]
+  
+}
+
+resource "aws_cognito_user_pool_client" "user_pool_client" {
+  depends_on = [ aws_cognito_user_pool.pool ]
+  name         = "pos-tech_pool_client"
+  user_pool_id = aws_cognito_user_pool.pool.id
+  generate_secret = false
+
+  allowed_oauth_flows                  = ["code", "implicit"]
+  allowed_oauth_scopes                 = ["email", "openid"]
+  allowed_oauth_flows_user_pool_client = true
+
+  callback_urls = ["https://example.com"]
+  logout_urls   = ["http://localhost:3000/logout"]
+
+  explicit_auth_flows = [
+    "ALLOW_USER_PASSWORD_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+    "ALLOW_USER_SRP_AUTH"
+  ]
+
+}
+
+resource "aws_cognito_user_pool_domain" "domain" {
+  domain       = "pos-tech-hiago-marques"  
+  user_pool_id = aws_cognito_user_pool.pool.id
 }
