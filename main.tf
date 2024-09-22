@@ -73,6 +73,14 @@ resource "aws_lambda_function" "login" {
   }
 }
 
+resource "aws_lambda_permission" "allow_cloudwatch" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.login.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = "arn:aws:events:eu-west-1:111122223333:rule/RunDaily"
+}
+
 resource "aws_apigatewayv2_api" "lambda" {
   name          = "serverless_lambda_gw"
   protocol_type = "HTTP"
