@@ -36,7 +36,7 @@ const signUpUser = async (username, name, password, cpf) => {
 
 async function registerUser(event) {
   const { username, name, password, cpf } = JSON.parse(event.body);
-  console.log("registerUser username", username);regi
+  console.log("registerUser username", username);
   try {
     await signUpUser(username, name, password, cpf);
     return {
